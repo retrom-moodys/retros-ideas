@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Gallery</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface-hover: #243044;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --error: #ef4444;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      background: var(--surface);
+      transition: border-color 0.15s, background 0.15s;
+      cursor: pointer;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--surface-hover);
+    }
+
+    .upload-zone svg {
+      width: 48px;
+      height: 48px;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .upload-zone p {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .upload-zone strong {
+      color: var(--accent);
+    }
+
+    .upload-zone input[type="file"] {
+      display: none;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--border);
+    }
+
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .status.visible {
+      display: block;
+    }
+
+    .status.info {
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #93c5fd;
+    }
+
+    .status.success {
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      color: #86efac;
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .gallery-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 2.5rem 0 1rem;
+      gap: 1rem;
+    }
+
+    .gallery-header h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .gallery-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      display: block;
+      background: var(--bg);
+    }
+
+    .card-body {
+      padding: 0.75rem;
+    }
+
+    .card-body .name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-body .meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Image Gallery</h1>
+      <p>Upload images to S3 and browse them via presigned URLs.</p>
+    </header>
+
+    <section>
+      <div class="upload-zone" id="dropZone">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+        </svg>
+        <p>Drag &amp; drop an image here, or <strong>click to browse</strong></p>
+        <p style="margin-top: 0.35rem; font-size: 0.8rem;">JPEG, PNG, GIF, WebP — max 4 MB (API Gateway limit)</p>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/gif,image/webp" />
+      </div>
+
+      <div class="actions">
+        <button class="btn-primary" id="uploadBtn" disabled>Upload selected image</button>
+        <button class="btn-secondary" id="clearBtn" disabled>Clear selection</button>
+      </div>
+
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section>
+      <div class="gallery-header">
+        <h2>Uploaded images</h2>
+        <button class="btn-secondary" id="refreshBtn">Refresh gallery</button>
+      </div>
+      <div class="gallery" id="gallery">
+        <div class="gallery-empty">Loading gallery…</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE_URL = "https://5royiog419.execute-api.us-east-1.amazonaws.com";
+    const MAX_FILE_SIZE = 4 * 1024 * 1024;
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const statusEl = document.getElementById("status");
+    const galleryEl = document.getElementById("gallery");
+
+    let selectedFile = null;
+
+    function getApiBaseUrl() {
+      return API_BASE_URL;
+    }
+
+    function showStatus(message, type = "info") {
+      statusEl.textContent = message;
+      statusEl.className = `status visible ${type}`;
+    }
+
+    function hideStatus() {
+      statusEl.className = "status";
+    }
+
+    function setUploadBusy(busy) {
+      uploadBtn.disabled = busy || !selectedFile;
+      clearBtn.disabled = busy || !selectedFile;
+      refreshBtn.disabled = busy;
+    }
+
+    function validateFile(file) {
+      if (!file) return "No file selected.";
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        return "Unsupported file type. Use JPEG, PNG, GIF, or WebP.";
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        return "File is too large. Maximum size is 4 MB.";
+      }
+      return null;
+    }
+
+    function selectFile(file) {
+      const error = validateFile(file);
+      if (error) {
+        selectedFile = null;
+        uploadBtn.disabled = true;
+        clearBtn.disabled = true;
+        showStatus(error, "error");
+        return;
+      }
+
+      selectedFile = file;
+      uploadBtn.disabled = false;
+      clearBtn.disabled = false;
+      showStatus(`Selected: ${file.name} (${formatBytes(file.size)})`, "info");
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function formatDate(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    async function parseJsonResponse(response) {
+      const text = await response.text();
+      if (!text) return {};
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error(text.slice(0, 200) || "Invalid JSON response from API.");
+      }
+    }
+
+    async function apiRequest(path, options = {}) {
+      const baseUrl = getApiBaseUrl();
+      if (!baseUrl) {
+        throw new Error("Set your API Gateway base URL above before uploading or listing images.");
+      }
+
+      let response;
+      try {
+        response = await fetch(`${baseUrl}${path}`, options);
+      } catch {
+        throw new Error(
+          "Cannot reach the API (browser blocked the request). " +
+          "Usually this means the Lambda returned a 500 without CORS headers, or API Gateway CORS is not configured. " +
+          "Check CloudWatch logs for the upload Lambda and enable CORS on GET /images and POST /upload."
+        );
+      }
+
+      const data = await parseJsonResponse(response);
+
+      if (!response.ok) {
+        const message = data.message || data.error || `Request failed (${response.status}).`;
+        throw new Error(message);
+      }
+
+      return data;
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          const base64 = String(result).split(",")[1];
+          resolve(base64);
+        };
+        reader.onerror = () => reject(new Error("Failed to read file."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /**
+     * Upload flow:
+     * 1. POST /upload with base64 image data → Lambda #1 stores object in S3
+     * 2. S3 event triggers Lambda #2 → DynamoDB metadata
+     */
+    async function uploadImage(file) {
+      showStatus("Encoding image…", "info");
+      const data = await fileToBase64(file);
+
+      const result = await apiRequest("/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          data,
+        }),
+      });
+
+      return result.key || result.imageId || file.name;
+    }
+
+    /**
+     * GET /images → { images: [{ imageId, filename, url, uploadedAt }] }
+     * Lambda reads DynamoDB and attaches presigned GET URLs.
+     */
+    async function fetchImages() {
+      const data = await apiRequest("/images");
+      return data.images || data.items || [];
+    }
+
+    function renderGallery(images) {
+      if (!images.length) {
+        galleryEl.innerHTML = '<div class="gallery-empty">No images yet. Upload one above.</div>';
+        return;
+      }
+
+      galleryEl.innerHTML = images
+        .map((image) => {
+          const name = escapeHtml(image.filename || image.key || image.imageId || "Untitled");
+          const url = escapeHtml(image.url || image.presignedUrl || "");
+          const meta = escapeHtml(formatDate(image.uploadedAt || image.createdAt));
+          const alt = name;
+
+          return `
+            <article class="card">
+              <img src="${url}" alt="${alt}" loading="lazy" onerror="this.alt='Failed to load image'" />
+              <div class="card-body">
+                <div class="name" title="${name}">${name}</div>
+                ${meta ? `<div class="meta">${meta}</div>` : ""}
+              </div>
+            </article>
+          `;
+        })
+        .join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    async function loadGallery() {
+      galleryEl.innerHTML = '<div class="gallery-empty">Loading gallery…</div>';
+
+      try {
+        const images = await fetchImages();
+        renderGallery(images);
+      } catch (error) {
+        galleryEl.innerHTML = `<div class="gallery-empty">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function handleUpload() {
+      const error = validateFile(selectedFile);
+      if (error) {
+        showStatus(error, "error");
+        return;
+      }
+
+      setUploadBusy(true);
+      showStatus("Uploading image…", "info");
+
+      try {
+        const key = await uploadImage(selectedFile);
+        showStatus(`Upload complete: ${key}. Metadata will appear after processing.`, "success");
+        selectedFile = null;
+        fileInput.value = "";
+        uploadBtn.disabled = true;
+        clearBtn.disabled = true;
+
+        // Lambda #2 runs asynchronously; retry briefly so new images show up.
+        setTimeout(loadGallery, 1500);
+        setTimeout(loadGallery, 4000);
+      } catch (error) {
+        showStatus(error.message, "error");
+      } finally {
+        setUploadBusy(false);
+      }
+    }
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files[0]) selectFile(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
+    });
+
+    uploadBtn.addEventListener("click", handleUpload);
+    clearBtn.addEventListener("click", () => {
+      selectedFile = null;
+      fileInput.value = "";
+      uploadBtn.disabled = true;
+      clearBtn.disabled = true;
+      hideStatus();
+    });
+    refreshBtn.addEventListener("click", loadGallery);
+
+    loadGallery();
+  </script>
+</body>
+</html>
