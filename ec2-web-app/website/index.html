@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact Form</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface-hover: #243044;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --error: #ef4444;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+
+    .grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr 1.2fr;
+        align-items: start;
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font: inherit;
+      padding: 0.65rem 0.75rem;
+      margin-bottom: 1rem;
+      transition: border-color 0.15s;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .field-error {
+      color: #fca5a5;
+      font-size: 0.8rem;
+      margin-top: -0.65rem;
+      margin-bottom: 0.75rem;
+      display: none;
+    }
+
+    .field-error.visible {
+      display: block;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--border);
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .status.visible {
+      display: block;
+    }
+
+    .status.info {
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #93c5fd;
+    }
+
+    .status.success {
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      color: #86efac;
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 0.75rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td.message-cell {
+      max-width: 280px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty-state {
+      color: var(--muted);
+      text-align: center;
+      padding: 2rem 1rem;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Contact Us</h1>
+      <p>Submit your details and view all messages stored in RDS.</p>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Send a message</h2>
+        <form id="contact-form" novalidate>
+          <div>
+            <label for="name">Name</label>
+            <input id="name" name="name" type="text" autocomplete="name" required />
+            <div class="field-error" data-field="name"></div>
+          </div>
+
+          <div>
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required />
+            <div class="field-error" data-field="email"></div>
+          </div>
+
+          <div>
+            <label for="message">Message</label>
+            <textarea id="message" name="message" required></textarea>
+            <div class="field-error" data-field="message"></div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="btn-primary" id="submit-btn">Submit</button>
+            <button type="reset" class="btn-secondary">Clear</button>
+          </div>
+        </form>
+
+        <div id="form-status" class="status" role="status" aria-live="polite"></div>
+      </section>
+
+      <section class="card">
+        <div class="table-header">
+          <h2>Submissions</h2>
+          <button type="button" class="btn-secondary" id="refresh-btn">Refresh</button>
+        </div>
+
+        <div id="table-status" class="status" role="status" aria-live="polite"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Message</th>
+                <th>Submitted</th>
+              </tr>
+            </thead>
+            <tbody id="submissions-body">
+              <tr>
+                <td colspan="5" class="empty-state">Loading submissions…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // Same-origin when served by Nginx on your domain. Override for local dev if needed.
+    const API_BASE_URL = "";
+
+    const form = document.getElementById("contact-form");
+    const submitBtn = document.getElementById("submit-btn");
+    const refreshBtn = document.getElementById("refresh-btn");
+    const formStatus = document.getElementById("form-status");
+    const tableStatus = document.getElementById("table-status");
+    const submissionsBody = document.getElementById("submissions-body");
+
+    function showStatus(el, message, type) {
+      el.textContent = message;
+      el.className = `status visible ${type}`;
+    }
+
+    function hideStatus(el) {
+      el.className = "status";
+      el.textContent = "";
+    }
+
+    function clearFieldErrors() {
+      document.querySelectorAll(".field-error").forEach((node) => {
+        node.textContent = "";
+        node.classList.remove("visible");
+      });
+    }
+
+    function showFieldErrors(fields) {
+      Object.entries(fields).forEach(([field, message]) => {
+        const node = document.querySelector(`.field-error[data-field="${field}"]`);
+        if (node) {
+          node.textContent = message;
+          node.classList.add("visible");
+        }
+      });
+    }
+
+    function formatDate(isoString) {
+      if (!isoString) return "—";
+      const date = new Date(isoString);
+      if (Number.isNaN(date.getTime())) return isoString;
+      return date.toLocaleString();
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function loadSubmissions() {
+      hideStatus(tableStatus);
+      submissionsBody.innerHTML =
+        '<tr><td colspan="5" class="empty-state">Loading submissions…</td></tr>';
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/submissions`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load submissions.");
+        }
+
+        const rows = data.submissions || [];
+        if (rows.length === 0) {
+          submissionsBody.innerHTML =
+            '<tr><td colspan="5" class="empty-state">No submissions yet.</td></tr>';
+          return;
+        }
+
+        submissionsBody.innerHTML = rows
+          .map(
+            (row) => `
+              <tr>
+                <td>${escapeHtml(row.id)}</td>
+                <td>${escapeHtml(row.name)}</td>
+                <td>${escapeHtml(row.email)}</td>
+                <td class="message-cell">${escapeHtml(row.message)}</td>
+                <td>${escapeHtml(formatDate(row.created_at))}</td>
+              </tr>
+            `
+          )
+          .join("");
+      } catch (error) {
+        submissionsBody.innerHTML =
+          '<tr><td colspan="5" class="empty-state">Could not load submissions.</td></tr>';
+        showStatus(tableStatus, error.message, "error");
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      hideStatus(formStatus);
+      clearFieldErrors();
+
+      const payload = {
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        message: form.message.value.trim(),
+      };
+
+      submitBtn.disabled = true;
+      showStatus(formStatus, "Submitting…", "info");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/submissions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (data.fields) {
+            showFieldErrors(data.fields);
+          }
+          throw new Error(data.error || "Submission failed.");
+        }
+
+        form.reset();
+        showStatus(formStatus, "Message sent successfully. An email notification was triggered.", "success");
+        await loadSubmissions();
+      } catch (error) {
+        showStatus(formStatus, error.message, "error");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    refreshBtn.addEventListener("click", loadSubmissions);
+    loadSubmissions();
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+[Unit]
+Description=EC2 Web App (Gunicorn)
+After=network.target
+
+[Service]
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/ec2-web-app/backend
+EnvironmentFile=/opt/ec2-web-app/backend/.env
+ExecStart=/opt/ec2-web-app/backend/.venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 app:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
