@@ -6,6 +6,12 @@
       "Effect": "Allow",
       "Action": ["ses:SendEmail", "ses:SendRawEmail"],
       "Resource": "*"
+    },
+    {
+      "Sid": "ReadAppEnvFromSSM",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": "arn:aws:ssm:*:*:parameter/ec2-web-app/*"
     }
   ]
 }

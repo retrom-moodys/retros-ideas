@@ -38,7 +38,9 @@ ec2-web-app/
 │   └── iam-policy.json         # EC2 instance role for SES
 ├── nginx/ec2-web-app.conf      # Reverse proxy + static files
 └── deploy/
-    ├── install.sh              # EC2 bootstrap script
+    ├── user-data.sh            # EC2 launch User Data (automated first-boot setup)
+    ├── install.sh              # Manual bootstrap (SSH) — also called by user-data.sh
+    ├── ssm-env.example         # Template for SSM SecureString (.env contents)
     └── ec2-web-app.service     # systemd unit for Gunicorn
 ```
 
@@ -69,7 +71,7 @@ psql -h YOUR_RDS_ENDPOINT -U webapp_user -d webapp -f backend/schema.sql
 1. Verify the **From** address (or domain) in SES.
 2. Verify the **To** (admin) address if your account is still in the SES sandbox.
 3. Request production access when ready to email unverified recipients.
-4. Attach `backend/iam-policy.json` to the EC2 instance IAM role so the app can call `ses:SendEmail`.
+4. Attach `backend/iam-policy.json` to the EC2 instance IAM role (SES send + SSM read for bootstrap).
 
 Environment variables (see `backend/env.example`):
 
@@ -80,6 +82,42 @@ Environment variables (see `backend/env.example`):
 | `AWS_REGION` | `us-east-1` |
 
 ### 3. EC2
+
+#### Option A — User Data (automated launch)
+
+Use `deploy/user-data.sh` as EC2 **User data** so the instance bootstraps itself on first launch.
+
+1. Store app secrets in **SSM Parameter Store** as a SecureString (see `deploy/ssm-env.example`):
+
+```bash
+aws ssm put-parameter \
+  --name "/ec2-web-app/env" \
+  --type "SecureString" \
+  --value "$(cat backend/.env)" \
+  --overwrite
+```
+
+2. Edit the **CONFIG** block at the top of `deploy/user-data.sh`:
+   - `GIT_REPO_URL` — public repo URL (private repos need deploy keys or S3 artifact instead)
+   - `DOMAIN` — your Route 53 domain
+   - `SSM_ENV_PARAM` — must match the parameter name above
+
+3. Launch Amazon Linux 2023 with:
+   - IAM instance profile using `iam-policy.json` (SES + SSM)
+   - Security group: **80**, **443** (optional), **22** from your IP
+   - **User data**: paste the contents of `deploy/user-data.sh`
+
+4. After launch, check bootstrap progress:
+
+```bash
+ssh ec2-user@YOUR_ELASTIC_IP
+sudo tail -f /var/log/ec2-web-app-user-data.log
+curl http://127.0.0.1/api/health
+```
+
+User data clones the repo, pulls `.env` from SSM, patches Nginx `server_name`, then runs `install.sh`. A marker file prevents re-running on reboot.
+
+#### Option B — Manual SSH install
 
 1. Launch Amazon Linux 2023 (t3.micro or similar).
 2. Security group inbound rules:
@@ -153,6 +191,7 @@ Serve the frontend separately (e.g. VS Code Live Server) and set `API_BASE_URL` 
 | Database connection error | RDS security group, credentials, and that `schema.sql` was applied |
 | Email not sent | SES sandbox limits, verified identities, EC2 IAM role, CloudWatch/app logs |
 | Domain not resolving | Route 53 A record, Elastic IP association, Nginx `server_name` |
+| User data failed | `sudo cat /var/log/ec2-web-app-user-data.log`, SSM param name, IAM role, git clone URL |
 
 View backend logs:
 

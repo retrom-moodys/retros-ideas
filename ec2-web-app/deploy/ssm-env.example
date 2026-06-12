@@ -1,0 +1,23 @@
+# Copy this file's contents (without comments) into an SSM SecureString parameter.
+# Parameter name must match SSM_ENV_PARAM in deploy/user-data.sh (default: /ec2-web-app/env).
+#
+# Create via AWS CLI:
+#   aws ssm put-parameter \
+#     --name "/ec2-web-app/env" \
+#     --type "SecureString" \
+#     --value "$(cat backend/.env)" \
+#     --overwrite
+#
+# Or paste the values below into the Systems Manager console → Parameter Store.
+
+DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
+DB_PORT=5432
+DB_NAME=webapp
+DB_USER=webapp_user
+DB_PASSWORD=change-me
+
+AWS_REGION=us-east-1
+SES_FROM_EMAIL=notifications@yourdomain.com
+SES_TO_EMAIL=admin@yourdomain.com
+
+CORS_ORIGINS=
