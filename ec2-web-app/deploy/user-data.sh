@@ -22,11 +22,11 @@ if [ -f "$MARKER" ]; then
 fi
 
 # ── CONFIG (edit before launch) ──────────────────────────────────────────────
-GIT_REPO_URL="https://github.com/YOUR_USER/retros-ideas.git"
+GIT_REPO_URL="https://github.com/retrom-moodys/retros-ideas.git"
 GIT_BRANCH="main"
 APP_SUBPATH="ec2-web-app"
 SSM_ENV_PARAM="/ec2-web-app/env"
-DOMAIN="yourdomain.com"
+DOMAIN="nakabiri.com"
 AWS_REGION="us-east-1"
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,8 @@ if [ ! -f "$APP_ROOT/backend/app.py" ]; then
   exit 1
 fi
 
+echo "==> Installing AWS CLI"
+dnf install -y awscli
 echo "==> Loading backend/.env from SSM ($SSM_ENV_PARAM)"
 aws ssm get-parameter \
   --name "$SSM_ENV_PARAM" \
