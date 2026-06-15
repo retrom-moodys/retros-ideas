@@ -1,11 +1,10 @@
 #!/bin/bash
-# EC2 User Data — paste into "Advanced details → User data" at launch (Amazon Linux 2023).
-# Runs as root on first boot. Re-runs are skipped after bootstrap completes.
+# EC2 User Data — NO AWS CLI, NO SSM, NO IAM role required.
+# Paste into Launch instance → Advanced details → User data (Amazon Linux 2023).
 #
-# Before launch:
-#   1. Edit the CONFIG section below (repo URL, domain, SSM parameter name).
-#   2. Store backend/.env contents in SSM as a SecureString (see deploy/ssm-env.example).
-#   3. Attach iam-policy.json to the instance role (SES + SSM read).
+# Secrets workflow (pick one):
+#   A) Leave DB_HOST empty → clone + install only → copy .env via SCP after launch (recommended)
+#   B) Fill in CONFIG below → .env written at boot (visible in EC2 console user-data)
 
 set -euo pipefail
 
@@ -21,13 +20,25 @@ if [ -f "$MARKER" ]; then
   exit 0
 fi
 
-# ── CONFIG (edit before launch) ──────────────────────────────────────────────
-GIT_REPO_URL="https://github.com/retrom-moodys/retros-ideas.git"
+# ── CONFIG ───────────────────────────────────────────────────────────────────
+GIT_REPO_URL="https://github.com/YOUR_USER/retros-ideas.git"
 GIT_BRANCH="main"
 APP_SUBPATH="ec2-web-app"
-SSM_ENV_PARAM="/ec2-web-app/env"
-DOMAIN="nakabiri.com"
-AWS_REGION="us-east-1"
+DOMAIN="yourdomain.com"
+
+# Leave DB_HOST empty to copy backend/.env via SCP after launch (recommended).
+DB_HOST=""
+DB_PORT="5432"
+DB_NAME="webapp"
+DB_USER="webapp_user"
+DB_PASSWORD=""
+EMAIL_TRANSPORT="smtp"
+SMTP_HOST="email-smtp.us-east-1.amazonaws.com"
+SMTP_PORT="587"
+SMTP_USER=""
+SMTP_PASSWORD=""
+MAIL_FROM=""
+MAIL_TO=""
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo "==> Installing git"
@@ -50,17 +61,29 @@ if [ ! -f "$APP_ROOT/backend/app.py" ]; then
   exit 1
 fi
 
-echo "==> Installing AWS CLI"
-dnf install -y awscli
-echo "==> Loading backend/.env from SSM ($SSM_ENV_PARAM)"
-aws ssm get-parameter \
-  --name "$SSM_ENV_PARAM" \
-  --with-decryption \
-  --region "$AWS_REGION" \
-  --query "Parameter.Value" \
-  --output text > "$APP_ROOT/backend/.env"
-chmod 600 "$APP_ROOT/backend/.env"
-chown ec2-user:ec2-user "$APP_ROOT/backend/.env"
+if [ -n "$DB_HOST" ] && [ -n "$DB_PASSWORD" ]; then
+  echo "==> Writing backend/.env from user-data CONFIG"
+  cat > "$APP_ROOT/backend/.env" <<EOF
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASSWORD}
+EMAIL_TRANSPORT=${EMAIL_TRANSPORT}
+SMTP_HOST=${SMTP_HOST}
+SMTP_PORT=${SMTP_PORT}
+SMTP_USE_TLS=true
+SMTP_USER=${SMTP_USER}
+SMTP_PASSWORD=${SMTP_PASSWORD}
+MAIL_FROM=${MAIL_FROM}
+MAIL_TO=${MAIL_TO}
+CORS_ORIGINS=
+EOF
+  chmod 600 "$APP_ROOT/backend/.env"
+  chown ec2-user:ec2-user "$APP_ROOT/backend/.env"
+else
+  echo "==> Skipping .env creation (copy via SCP after launch — see README)"
+fi
 
 if [ -n "$DOMAIN" ] && [ "$DOMAIN" != "yourdomain.com" ]; then
   echo "==> Setting Nginx server_name to $DOMAIN"
@@ -70,9 +93,14 @@ fi
 
 echo "==> Running install.sh as ec2-user"
 chmod +x "$APP_ROOT/deploy/install.sh"
-sudo -u ec2-user "$APP_ROOT/deploy/install.sh"
+if sudo -u ec2-user "$APP_ROOT/deploy/install.sh"; then
+  touch "$MARKER"
+  echo "==> Bootstrap complete at $(date -Is)"
+else
+  echo "==> install.sh failed — check $LOG"
+  echo "    If .env is missing, copy it and re-run: /opt/ec2-web-app/deploy/install.sh"
+  exit 1
+fi
 
-touch "$MARKER"
-echo "==> Bootstrap complete at $(date -Is)"
 echo "    Log: $LOG"
 echo "    Verify: curl http://127.0.0.1/api/health"

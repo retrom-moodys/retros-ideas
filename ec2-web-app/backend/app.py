@@ -1,10 +1,12 @@
-"""Contact form API: store submissions in RDS and notify via SES."""
+"""Contact form API: store submissions in RDS and notify via email."""
 
 import os
 import re
+import smtplib
 from datetime import datetime, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-import boto3
 import psycopg2
 from flask import Flask, jsonify, request
 from psycopg2.extras import RealDictCursor
@@ -46,6 +48,61 @@ def apply_cors(response):
     return response
 
 
+def mail_from_address():
+    return os.environ.get("MAIL_FROM") or os.environ["SES_FROM_EMAIL"]
+
+
+def mail_to_address():
+    return os.environ.get("MAIL_TO") or os.environ["SES_TO_EMAIL"]
+
+
+def email_transport():
+    return os.environ.get("EMAIL_TRANSPORT", "smtp").strip().lower()
+
+
+def email_is_configured():
+    transport = email_transport()
+    if transport in ("", "none", "off", "disabled"):
+        return False
+    if transport == "smtp":
+        return all(
+            os.environ.get(key)
+            for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM", "MAIL_TO")
+        ) or all(
+            os.environ.get(key)
+            for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SES_FROM_EMAIL", "SES_TO_EMAIL")
+        )
+    if transport == "ses":
+        return all(
+            os.environ.get(key) for key in ("SES_FROM_EMAIL", "SES_TO_EMAIL")
+        )
+    return False
+
+
+def build_email_content(name, email, message, submission_id):
+    subject = f"New contact form submission #{submission_id}"
+    body_text = (
+        f"A new message was submitted via the contact form.\n\n"
+        f"Submission ID: {submission_id}\n"
+        f"Name: {name}\n"
+        f"Email: {email}\n\n"
+        f"Message:\n{message}\n"
+    )
+    body_html = f"""
+    <html>
+      <body>
+        <h2>New contact form submission</h2>
+        <p><strong>Submission ID:</strong> {submission_id}</p>
+        <p><strong>Name:</strong> {name}</p>
+        <p><strong>Email:</strong> {email}</p>
+        <p><strong>Message:</strong></p>
+        <p>{message.replace(chr(10), "<br>")}</p>
+      </body>
+    </html>
+    """
+    return subject, body_text, body_html
+
+
 @app.after_request
 def after_request(response):
     return apply_cors(response)
@@ -53,7 +110,7 @@ def after_request(response):
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "email_configured": email_is_configured()})
 
 
 @app.route("/api/submissions", methods=["OPTIONS"])
@@ -133,10 +190,13 @@ def create_submission():
         app.logger.exception("Failed to create submission")
         return jsonify({"error": "Database error", "detail": str(exc)}), 500
 
-    try:
-        send_notification_email(name, email, message, row["id"])
-    except Exception:
-        app.logger.exception("SES notification failed for submission %s", row["id"])
+    if email_is_configured():
+        try:
+            send_notification_email(name, email, message, row["id"])
+        except Exception:
+            app.logger.exception(
+                "Email notification failed for submission %s", row["id"]
+            )
 
     created_at = row["created_at"]
     if isinstance(created_at, datetime):
@@ -159,30 +219,52 @@ def create_submission():
 
 
 def send_notification_email(name, email, message, submission_id):
-    from_email = os.environ["SES_FROM_EMAIL"]
-    to_email = os.environ["SES_TO_EMAIL"]
-    region = os.environ.get("AWS_REGION", "us-east-1")
-
-    subject = f"New contact form submission #{submission_id}"
-    body_text = (
-        f"A new message was submitted via the contact form.\n\n"
-        f"Submission ID: {submission_id}\n"
-        f"Name: {name}\n"
-        f"Email: {email}\n\n"
-        f"Message:\n{message}\n"
+    transport = email_transport()
+    subject, body_text, body_html = build_email_content(
+        name, email, message, submission_id
     )
-    body_html = f"""
-    <html>
-      <body>
-        <h2>New contact form submission</h2>
-        <p><strong>Submission ID:</strong> {submission_id}</p>
-        <p><strong>Name:</strong> {name}</p>
-        <p><strong>Email:</strong> {email}</p>
-        <p><strong>Message:</strong></p>
-        <p>{message.replace(chr(10), "<br>")}</p>
-      </body>
-    </html>
-    """
+
+    if transport == "smtp":
+        send_via_smtp(subject, body_text, body_html, email)
+        return
+
+    if transport == "ses":
+        send_via_ses_api(subject, body_text, body_html, email)
+        return
+
+    app.logger.info("EMAIL_TRANSPORT=%s; skipping notification", transport)
+
+
+def send_via_smtp(subject, body_text, body_html, reply_to):
+    from_email = mail_from_address()
+    to_email = mail_to_address()
+    host = os.environ["SMTP_HOST"]
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    username = os.environ["SMTP_USER"]
+    password = os.environ["SMTP_PASSWORD"]
+    use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg["Reply-To"] = reply_to
+    msg.attach(MIMEText(body_text, "plain", "utf-8"))
+    msg.attach(MIMEText(body_html, "html", "utf-8"))
+
+    with smtplib.SMTP(host, port, timeout=30) as client:
+        if use_tls:
+            client.starttls()
+        client.login(username, password)
+        client.sendmail(from_email, [to_email], msg.as_string())
+
+
+def send_via_ses_api(subject, body_text, body_html, reply_to):
+    import boto3
+
+    from_email = mail_from_address()
+    to_email = mail_to_address()
+    region = os.environ.get("AWS_REGION", "us-east-1")
 
     ses = boto3.client("ses", region_name=region)
     ses.send_email(
@@ -195,7 +277,7 @@ def send_notification_email(name, email, message, submission_id):
                 "Html": {"Data": body_html, "Charset": "UTF-8"},
             },
         },
-        ReplyToAddresses=[email],
+        ReplyToAddresses=[reply_to],
     )
 
 

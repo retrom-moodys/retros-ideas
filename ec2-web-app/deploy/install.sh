@@ -6,12 +6,7 @@ WEB_ROOT="/var/www/ec2-web-app"
 
 echo "==> Installing system packages"
 sudo dnf update -y
-sudo dnf install -y nginx python3.11 python3.11-pip postgresql15 mysql
-
-echo "==> Installing AWS CLI (if missing)"
-if ! command -v aws &> /dev/null; then
-  sudo dnf install -y awscli
-fi
+sudo dnf install -y nginx python3.11 python3.11-pip postgresql15
 
 echo "==> Creating app directories"
 sudo mkdir -p "$APP_ROOT" "$WEB_ROOT"
@@ -35,15 +30,16 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install --no-cache-dir -r requirements.txt
 
+ENV_READY=true
 if [ ! -f "$APP_ROOT/backend/.env" ]; then
   echo "WARNING: $APP_ROOT/backend/.env missing."
-  echo "Copy backend/env.example to .env and fill in RDS + SES values."
+  echo "Copy backend/env.example to .env, fill in RDS + SMTP, then re-run this script."
+  ENV_READY=false
 fi
 
 echo "==> Deploy static site"
 sudo cp -r "$APP_ROOT/website/." "$WEB_ROOT/"
 sudo chown -R nginx:nginx "$WEB_ROOT"
-
 
 echo "==> Configure Nginx"
 sudo cp "$APP_ROOT/nginx/ec2-web-app.conf" /etc/nginx/conf.d/ec2-web-app.conf
@@ -55,10 +51,15 @@ echo "==> Configure systemd service"
 sudo cp "$APP_ROOT/deploy/ec2-web-app.service" /etc/systemd/system/ec2-web-app.service
 sudo systemctl daemon-reload
 sudo systemctl enable ec2-web-app
+
+if [ "$ENV_READY" = false ]; then
+  echo "==> Skipping backend start until .env exists"
+  exit 0
+fi
+
 sudo systemctl restart ec2-web-app
 
 echo "==> Done"
-echo "Verify:"
 echo "==> Validating app health"
 if ! curl -f http://127.0.0.1/api/health; then
   echo "ERROR: App failed health check"

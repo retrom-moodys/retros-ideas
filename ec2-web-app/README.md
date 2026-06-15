@@ -1,6 +1,52 @@
 # EC2 Web App (Contact Form)
 
-Full-stack contact form on EC2: static frontend, Flask API, PostgreSQL on RDS, email notifications via SES, and domain routing through Route 53.
+Full-stack contact form on EC2: static frontend, Flask API, PostgreSQL on RDS, email notifications, and domain routing through Route 53.
+
+## Locked-down AWS account (no CLI, no IAM changes)
+
+If you **cannot** use AWS CLI, attach IAM policies, or modify roles, use this path. Everything runs with **console-only** actions plus **SSH/SCP**.
+
+| Need | Workaround |
+|------|------------|
+| Secrets (RDS, SMTP) | Copy `backend/.env` to EC2 via **SCP** (not SSM) |
+| Email (SES) | **SES SMTP credentials** in `.env` — admin creates once in SES console |
+| EC2 bootstrap | `deploy/user-data.sh` — clones repo, **no AWS CLI** |
+| IAM instance role | **Not required** for SMTP email |
+
+### Quick start (locked-down)
+
+1. **Ask your admin** for:
+   - RDS endpoint, database name, username, password
+   - SES **SMTP credentials** (SES console → SMTP settings → Create SMTP credentials)
+   - Verified `MAIL_FROM` / `MAIL_TO` addresses (if SES sandbox)
+   - EC2 security group with ports **22**, **80** open
+   - Route 53 A record → EC2 Elastic IP (if using a custom domain)
+
+2. **On your laptop**, create `backend/.env` from `backend/env.example` (fill in DB + SMTP values).
+
+3. **Launch EC2** (Amazon Linux 2023) via console:
+   - Paste `deploy/user-data.sh` into **User data** (edit `GIT_REPO_URL` and `DOMAIN`)
+   - Leave `DB_HOST` empty in user-data — secrets go via SCP instead
+   - **No IAM instance profile required**
+
+4. **Copy secrets and finish setup**:
+
+```powershell
+scp backend/.env ec2-user@YOUR_EC2_IP:/opt/ec2-web-app/backend/.env
+ssh ec2-user@YOUR_EC2_IP "/opt/ec2-web-app/deploy/install.sh"
+```
+
+5. **Apply database schema** (from a machine that can reach RDS — your laptop with VPN, or EC2):
+
+```bash
+psql -h YOUR_RDS_ENDPOINT -U webapp_user -d webapp -f backend/schema.sql
+```
+
+6. Open `http://YOUR_EC2_IP` or your domain. Form saves to RDS; email sends via SMTP.
+
+Set `EMAIL_TRANSPORT=none` in `.env` if email is not set up yet — the form still works.
+
+---
 
 ## Architecture
 
@@ -22,7 +68,7 @@ User → Route 53 (yourdomain.com)
 2. Nginx serves `website/index.html`.
 3. User submits the form (Name, Email, Message).
 4. Browser sends `POST /api/submissions` to the Flask backend.
-5. Backend validates input, inserts a row into RDS, and sends an admin notification via SES.
+5. Backend validates input, inserts a row into RDS, and sends an admin notification via SMTP (or SES API if configured).
 6. The submissions table refreshes from `GET /api/submissions`.
 
 ## Project layout
@@ -35,12 +81,13 @@ ec2-web-app/
 │   ├── schema.sql              # PostgreSQL table
 │   ├── requirements.txt
 │   ├── env.example
-│   └── iam-policy.json         # EC2 instance role for SES
+│   └── iam-policy.json         # Optional — admin-only (SES API + SSM path)
 ├── nginx/ec2-web-app.conf      # Reverse proxy + static files
 └── deploy/
-    ├── user-data.sh            # EC2 launch User Data (automated first-boot setup)
-    ├── install.sh              # Manual bootstrap (SSH) — also called by user-data.sh
-    ├── ssm-env.example         # Template for SSM SecureString (.env contents)
+    ├── user-data.sh            # EC2 User Data — no AWS CLI / no IAM (default)
+    ├── user-data-ssm.sh        # Optional — requires IAM role + SSM (admin)
+    ├── install.sh              # Bootstrap — also called by user-data.sh
+    ├── ssm-env.example         # Template for SSM path only
     └── ec2-web-app.service     # systemd unit for Gunicorn
 ```
 
@@ -66,66 +113,52 @@ ec2-web-app/
 psql -h YOUR_RDS_ENDPOINT -U webapp_user -d webapp -f backend/schema.sql
 ```
 
-### 2. SES (email)
+### 2. Email (SES SMTP — no IAM on EC2)
 
-1. Verify the **From** address (or domain) in SES.
-2. Verify the **To** (admin) address if your account is still in the SES sandbox.
-3. Request production access when ready to email unverified recipients.
-4. Attach `backend/iam-policy.json` to the EC2 instance IAM role (SES send + SSM read for bootstrap).
+**Locked-down path (recommended):** use SES **SMTP**, not the SES API. Your admin creates SMTP credentials once in the SES console; you paste them into `backend/.env`. No IAM role on EC2, no boto3.
 
-Environment variables (see `backend/env.example`):
+1. Admin verifies **From** and **To** addresses in SES (required in sandbox).
+2. Admin opens SES → **SMTP settings** → **Create SMTP credentials**.
+3. Put credentials in `.env`:
 
 | Variable | Example |
 |----------|---------|
-| `SES_FROM_EMAIL` | `notifications@yourdomain.com` |
-| `SES_TO_EMAIL` | `admin@yourdomain.com` |
-| `AWS_REGION` | `us-east-1` |
+| `EMAIL_TRANSPORT` | `smtp` |
+| `SMTP_HOST` | `email-smtp.us-east-1.amazonaws.com` |
+| `SMTP_USER` | (from SES SMTP credentials) |
+| `SMTP_PASSWORD` | (from SES SMTP credentials) |
+| `MAIL_FROM` | `notifications@yourdomain.com` |
+| `MAIL_TO` | `admin@yourdomain.com` |
+
+**Optional — SES API via boto3:** set `EMAIL_TRANSPORT=ses`, install `requirements-ses-api.txt`, and ask admin to attach `iam-policy.json` to the EC2 role. Most locked-down accounts should use SMTP instead.
 
 ### 3. EC2
 
-#### Option A — User Data (automated launch)
+#### Option A — User Data (no AWS CLI)
 
-Use `deploy/user-data.sh` as EC2 **User data** so the instance bootstraps itself on first launch.
+Use `deploy/user-data.sh` — clones the repo and runs `install.sh`. **No AWS CLI, SSM, or IAM role.**
 
-1. Store app secrets in **SSM Parameter Store** as a SecureString (see `deploy/ssm-env.example`):
-
-```bash
-aws ssm put-parameter \
-  --name "/ec2-web-app/env" \
-  --type "SecureString" \
-  --value "$(cat backend/.env)" \
-  --overwrite
-```
-
-2. Edit the **CONFIG** block at the top of `deploy/user-data.sh`:
-   - `GIT_REPO_URL` — public repo URL (private repos need deploy keys or S3 artifact instead)
-   - `DOMAIN` — your Route 53 domain
-   - `SSM_ENV_PARAM` — must match the parameter name above
-
-3. Launch Amazon Linux 2023 with:
-   - IAM instance profile using `iam-policy.json` (SES + SSM)
-   - Security group: **80**, **443** (optional), **22** from your IP
-   - **User data**: paste the contents of `deploy/user-data.sh`
-
-4. After launch, check bootstrap progress:
+1. Edit **CONFIG** in `deploy/user-data.sh` (`GIT_REPO_URL`, `DOMAIN`).
+2. Leave `DB_HOST` empty; copy `.env` via SCP after launch (see locked-down quick start above).
+3. Launch Amazon Linux 2023 with **User data** = contents of `user-data.sh`.
+4. After boot:
 
 ```bash
-ssh ec2-user@YOUR_ELASTIC_IP
 sudo tail -f /var/log/ec2-web-app-user-data.log
-curl http://127.0.0.1/api/health
 ```
 
-User data clones the repo, pulls `.env` from SSM, patches Nginx `server_name`, then runs `install.sh`. A marker file prevents re-running on reboot.
+#### Option B — User Data + SSM (admin only)
 
-#### Option B — Manual SSH install
+Use `deploy/user-data-ssm.sh` only if an admin created the SSM parameter and attached `iam-policy.json`.
+
+#### Option C — Manual SSH install
 
 1. Launch Amazon Linux 2023 (t3.micro or similar).
 2. Security group inbound rules:
    - **80** from `0.0.0.0/0` (HTTP)
    - **443** from `0.0.0.0/0` (HTTPS, optional but recommended)
    - **22** from your IP (SSH)
-3. Attach an IAM instance profile with SES permissions (`iam-policy.json`).
-4. Copy this project folder to `/opt/ec2-web-app`:
+3. Copy this project folder to `/opt/ec2-web-app` (no IAM profile needed):
 
 ```bash
 sudo mkdir -p /opt/ec2-web-app
@@ -189,9 +222,9 @@ Serve the frontend separately (e.g. VS Code Live Server) and set `API_BASE_URL` 
 |---------|--------|
 | 502 on `/api/*` | `sudo systemctl status ec2-web-app` and `/opt/ec2-web-app/backend/.env` |
 | Database connection error | RDS security group, credentials, and that `schema.sql` was applied |
-| Email not sent | SES sandbox limits, verified identities, EC2 IAM role, CloudWatch/app logs |
+| Email not sent | SMTP credentials, SES sandbox, verified addresses, `EMAIL_TRANSPORT` |
 | Domain not resolving | Route 53 A record, Elastic IP association, Nginx `server_name` |
-| User data failed | `sudo cat /var/log/ec2-web-app-user-data.log`, SSM param name, IAM role, git clone URL |
+| User data failed | `sudo cat /var/log/ec2-web-app-user-data.log`, git clone URL, then SCP `.env` |
 
 View backend logs:
 
