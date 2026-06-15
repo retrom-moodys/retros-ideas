@@ -55,7 +55,7 @@ sudo systemctl restart ec2-web-app
 
 echo "==> Done"
 echo "==> Validating app health"
-if ! curl -f http://127.0.0.1/api/health; then
+if ! curl -f http://127.0.0.1:8000/api/health; then
   echo "ERROR: App failed health check"
   exit 1
 fi
