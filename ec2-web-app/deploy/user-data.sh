@@ -1,10 +1,8 @@
 #!/bin/bash
-# EC2 User Data — NO AWS CLI, NO SSM, NO IAM role required.
+# EC2 User Data — NO AWS CLI, NO SSM, NO IAM role, NO RDS required.
 # Paste into Launch instance → Advanced details → User data (Amazon Linux 2023).
 #
-# Secrets workflow (pick one):
-#   A) Leave DB_HOST empty → clone + install only → copy .env via SCP after launch (recommended)
-#   B) Fill in CONFIG below → .env written at boot (visible in EC2 console user-data)
+# Uses local SQLite on the EC2 instance. Email is optional (SMTP creds via SCP if needed).
 
 set -euo pipefail
 
@@ -26,13 +24,8 @@ GIT_BRANCH="main"
 APP_SUBPATH="ec2-web-app"
 DOMAIN="yourdomain.com"
 
-# Leave DB_HOST empty to copy backend/.env via SCP after launch (recommended).
-DB_HOST=""
-DB_PORT="5432"
-DB_NAME="webapp"
-DB_USER="webapp_user"
-DB_PASSWORD=""
-EMAIL_TRANSPORT="smtp"
+# Optional SMTP — leave empty to run without email (form still saves to SQLite)
+EMAIL_TRANSPORT="none"
 SMTP_HOST="email-smtp.us-east-1.amazonaws.com"
 SMTP_PORT="587"
 SMTP_USER=""
@@ -61,14 +54,13 @@ if [ ! -f "$APP_ROOT/backend/app.py" ]; then
   exit 1
 fi
 
-if [ -n "$DB_HOST" ] && [ -n "$DB_PASSWORD" ]; then
-  echo "==> Writing backend/.env from user-data CONFIG"
-  cat > "$APP_ROOT/backend/.env" <<EOF
-DB_HOST=${DB_HOST}
-DB_PORT=${DB_PORT}
-DB_NAME=${DB_NAME}
-DB_USER=${DB_USER}
-DB_PASSWORD=${DB_PASSWORD}
+echo "==> Writing backend/.env"
+if [ -n "$SMTP_USER" ] && [ -n "$SMTP_PASSWORD" ]; then
+  EMAIL_TRANSPORT="smtp"
+fi
+
+cat > "$APP_ROOT/backend/.env" <<EOF
+DB_PATH=/opt/ec2-web-app/data/submissions.db
 EMAIL_TRANSPORT=${EMAIL_TRANSPORT}
 SMTP_HOST=${SMTP_HOST}
 SMTP_PORT=${SMTP_PORT}
@@ -79,11 +71,8 @@ MAIL_FROM=${MAIL_FROM}
 MAIL_TO=${MAIL_TO}
 CORS_ORIGINS=
 EOF
-  chmod 600 "$APP_ROOT/backend/.env"
-  chown ec2-user:ec2-user "$APP_ROOT/backend/.env"
-else
-  echo "==> Skipping .env creation (copy via SCP after launch — see README)"
-fi
+chmod 600 "$APP_ROOT/backend/.env"
+chown ec2-user:ec2-user "$APP_ROOT/backend/.env"
 
 if [ -n "$DOMAIN" ] && [ "$DOMAIN" != "yourdomain.com" ]; then
   echo "==> Setting Nginx server_name to $DOMAIN"
@@ -98,7 +87,6 @@ if sudo -u ec2-user "$APP_ROOT/deploy/install.sh"; then
   echo "==> Bootstrap complete at $(date -Is)"
 else
   echo "==> install.sh failed — check $LOG"
-  echo "    If .env is missing, copy it and re-run: /opt/ec2-web-app/deploy/install.sh"
   exit 1
 fi
 

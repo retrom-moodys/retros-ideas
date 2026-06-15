@@ -1,33 +1,82 @@
-"""Contact form API: store submissions in RDS and notify via email."""
+"""Contact form API: store submissions in local SQLite and notify via email."""
 
 import os
 import re
 import smtplib
+import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
-import psycopg2
 from flask import Flask, jsonify, request
-from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+DEFAULT_DB_PATH = "/opt/ec2-web-app/data/submissions.db"
+SCHEMA_VERSION = 1
 
 
-def get_db_config():
-    return {
-        "host": os.environ["DB_HOST"],
-        "port": int(os.environ.get("DB_PORT", "5432")),
-        "dbname": os.environ["DB_NAME"],
-        "user": os.environ["DB_USER"],
-        "password": os.environ["DB_PASSWORD"],
-    }
+def get_db_path():
+    if path := os.environ.get("DB_PATH", "").strip():
+        return path
+    if os.name == "nt":
+        return str(Path(__file__).resolve().parent / "data" / "submissions.db")
+    return DEFAULT_DB_PATH
 
 
+def init_db(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_submissions_created_at
+        ON submissions (created_at DESC)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO schema_meta (key, value)
+        VALUES ('version', ?)
+        """,
+        (str(SCHEMA_VERSION),),
+    )
+
+
+@contextmanager
 def get_db_connection():
-    return psycopg2.connect(**get_db_config(), cursor_factory=RealDictCursor)
+    db_path = Path(get_db_path())
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        init_db(conn)
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def cors_origins():
@@ -49,15 +98,15 @@ def apply_cors(response):
 
 
 def mail_from_address():
-    return os.environ.get("MAIL_FROM") or os.environ["SES_FROM_EMAIL"]
+    return os.environ.get("MAIL_FROM") or os.environ.get("SES_FROM_EMAIL", "")
 
 
 def mail_to_address():
-    return os.environ.get("MAIL_TO") or os.environ["SES_TO_EMAIL"]
+    return os.environ.get("MAIL_TO") or os.environ.get("SES_TO_EMAIL", "")
 
 
 def email_transport():
-    return os.environ.get("EMAIL_TRANSPORT", "smtp").strip().lower()
+    return os.environ.get("EMAIL_TRANSPORT", "none").strip().lower()
 
 
 def email_is_configured():
@@ -65,18 +114,40 @@ def email_is_configured():
     if transport in ("", "none", "off", "disabled"):
         return False
     if transport == "smtp":
-        return all(
+        has_named = all(
             os.environ.get(key)
             for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM", "MAIL_TO")
-        ) or all(
+        )
+        has_legacy = all(
             os.environ.get(key)
             for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SES_FROM_EMAIL", "SES_TO_EMAIL")
         )
+        return has_named or has_legacy
     if transport == "ses":
-        return all(
-            os.environ.get(key) for key in ("SES_FROM_EMAIL", "SES_TO_EMAIL")
-        )
+        return all(os.environ.get(key) for key in ("SES_FROM_EMAIL", "SES_TO_EMAIL"))
     return False
+
+
+def format_created_at(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed.astimezone(timezone.utc).isoformat()
+    except ValueError:
+        return str(value)
+
+
+def row_to_submission(row):
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "email": row["email"],
+        "message": row["message"],
+        "created_at": format_created_at(row["created_at"]),
+    }
 
 
 def build_email_content(name, email, message, submission_id):
@@ -110,7 +181,22 @@ def after_request(response):
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "email_configured": email_is_configured()})
+    try:
+        with get_db_connection() as conn:
+            conn.execute("SELECT 1")
+        db_status = "ok"
+    except sqlite3.Error:
+        app.logger.exception("Database health check failed")
+        db_status = "error"
+
+    return jsonify(
+        {
+            "status": "ok" if db_status == "ok" else "degraded",
+            "database": db_status,
+            "db_path": get_db_path(),
+            "email_configured": email_is_configured(),
+        }
+    )
 
 
 @app.route("/api/submissions", methods=["OPTIONS"])
@@ -122,35 +208,18 @@ def submissions_options():
 def list_submissions():
     try:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT id, name, email, message, created_at
-                    FROM submissions
-                    ORDER BY created_at DESC
-                    """
-                )
-                rows = cur.fetchall()
-    except psycopg2.Error as exc:
+            rows = conn.execute(
+                """
+                SELECT id, name, email, message, created_at
+                FROM submissions
+                ORDER BY created_at DESC
+                """
+            ).fetchall()
+    except sqlite3.Error as exc:
         app.logger.exception("Failed to list submissions")
         return jsonify({"error": "Database error", "detail": str(exc)}), 500
 
-    submissions = []
-    for row in rows:
-        created_at = row["created_at"]
-        if isinstance(created_at, datetime):
-            created_at = created_at.astimezone(timezone.utc).isoformat()
-        submissions.append(
-            {
-                "id": row["id"],
-                "name": row["name"],
-                "email": row["email"],
-                "message": row["message"],
-                "created_at": created_at,
-            }
-        )
-
-    return jsonify({"submissions": submissions})
+    return jsonify({"submissions": [row_to_submission(row) for row in rows]})
 
 
 @app.route("/api/submissions", methods=["POST"])
@@ -175,18 +244,22 @@ def create_submission():
 
     try:
         with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO submissions (name, email, message)
-                    VALUES (%s, %s, %s)
-                    RETURNING id, name, email, message, created_at
-                    """,
-                    (name, email, message),
-                )
-                row = cur.fetchone()
-            conn.commit()
-    except psycopg2.Error as exc:
+            cursor = conn.execute(
+                """
+                INSERT INTO submissions (name, email, message)
+                VALUES (?, ?, ?)
+                """,
+                (name, email, message),
+            )
+            row = conn.execute(
+                """
+                SELECT id, name, email, message, created_at
+                FROM submissions
+                WHERE id = ?
+                """,
+                (cursor.lastrowid,),
+            ).fetchone()
+    except sqlite3.Error as exc:
         app.logger.exception("Failed to create submission")
         return jsonify({"error": "Database error", "detail": str(exc)}), 500
 
@@ -198,24 +271,7 @@ def create_submission():
                 "Email notification failed for submission %s", row["id"]
             )
 
-    created_at = row["created_at"]
-    if isinstance(created_at, datetime):
-        created_at = created_at.astimezone(timezone.utc).isoformat()
-
-    return (
-        jsonify(
-            {
-                "submission": {
-                    "id": row["id"],
-                    "name": row["name"],
-                    "email": row["email"],
-                    "message": row["message"],
-                    "created_at": created_at,
-                }
-            }
-        ),
-        201,
-    )
+    return jsonify({"submission": row_to_submission(row)}), 201
 
 
 def send_notification_email(name, email, message, submission_id):

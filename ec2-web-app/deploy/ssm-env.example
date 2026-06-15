@@ -1,19 +1,16 @@
 # Optional: SSM SecureString contents for deploy/user-data-ssm.sh only.
-# Locked-down accounts should use SCP + deploy/user-data.sh instead.
 
-DB_HOST=your-rds-endpoint.region.rds.amazonaws.com
-DB_PORT=5432
-DB_NAME=webapp
-DB_USER=webapp_user
-DB_PASSWORD=change-me
+DB_PATH=/opt/ec2-web-app/data/submissions.db
+EMAIL_TRANSPORT=none
 
-EMAIL_TRANSPORT=smtp
-SMTP_HOST=email-smtp.us-east-1.amazonaws.com
-SMTP_PORT=587
-SMTP_USE_TLS=true
-SMTP_USER=your-ses-smtp-username
-SMTP_PASSWORD=your-ses-smtp-password
-MAIL_FROM=notifications@yourdomain.com
-MAIL_TO=admin@yourdomain.com
+# Uncomment when SMTP is configured:
+# EMAIL_TRANSPORT=smtp
+# SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+# SMTP_PORT=587
+# SMTP_USE_TLS=true
+# SMTP_USER=your-ses-smtp-username
+# SMTP_PASSWORD=your-ses-smtp-password
+# MAIL_FROM=notifications@yourdomain.com
+# MAIL_TO=admin@yourdomain.com
 
 CORS_ORIGINS=
