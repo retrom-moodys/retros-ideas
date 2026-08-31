@@ -5,6 +5,110 @@
 
 ---
 
+# ⚑ ACTIVE REFRAME — "The Trisolaran Cut"
+
+*The audience is no longer human. This section overrides Goal, Audience, Hypothesis,
+Tone, and Risks below. The visualization mechanics and Key Columns (further down) are
+inherited unchanged except where noted. The original human framing is retained beneath
+for provenance — see "Why Story A".*
+
+**One image. Cold tone. Maximum honesty. Built for instant decisions.**
+
+## Audience — the Trisolaran fleet
+
+A hive-mind civilization fleeing a chaotic three-body star system. Design implications,
+in order of consequence:
+
+- **Collective survival rule: one surviving member = the civilization survives.** This
+  is the master constraint. It makes the fleet **risk-seeking and portfolio-driven** —
+  the goal is to maximize the *number of independent survivable bets*, not the safety of
+  any single one. Even a marginal, low-odds world is worth a seed when you need only one
+  to land.
+- **Hive cognition:** perceives the whole decision surface in parallel. Wants **density
+  and completeness, not narrative pacing or simplification.** No hand-holding.
+- **Native masters of orbital mechanics; chaos is their ancestral trauma.** Do not
+  explain the physics. Their hierarchy of desire: *stability → survivable conditions →
+  reachability.*
+- **Cold, unsentimental, deterministic.** This is a targeting solution, not a brochure.
+
+## Goal (reframed)
+
+Give the collective, in one cold glance, the **complete field of seed targets** — every
+world with any survivable-and-reachable value — so it can disperse across as many
+independent bets as possible. *Not "find the one home." Map all the shots.*
+
+**Success looks like:** the hive can, at a glance, count and locate every viable target
+and rank each by cost (distance) and certainty (confidence flags) — then seed them all.
+
+## Hypothesis (same data shape, opposite valence, hardened)
+
+> The catalog is overwhelmingly furnaces — gas giants and heat. Genuinely survivable
+> worlds are few (~10 small + temperate) and cluster in the faint, hard-to-confirm
+> corner. For a portfolio-survival strategist this means viable targets are scarce and
+> mostly marginal — so **every reachable candidate matters, and the fleet must bet
+> wide.** The empty corner is not humility (the human reading); it is the arithmetic of
+> desperation.
+
+## Tone
+
+Cold, operational, deterministic. The takeaway lives in the words, e.g.:
+> *"1,174 worlds. Ten within survivable bounds. None confirmed stable. Seed all
+> reachable. One survivor is enough."*
+
+## Design changes vs. the human cut (still Concept 1, one scatter)
+
+| Element | Change |
+|---|---|
+| **Reference anchor** | *Home* (the dying three-body world) replaces Earth & Jupiter. |
+| **Survivable Zone** | Drawn target box (small radius + temperate-enough `pl_eqt`). Labeled explicitly as **our inference**, not Trisolaran biology. |
+| **Distance → opacity** | Solid = near = cheap bet; faint = far = costly bet. A *cost cue, not a filter* — the hive seeds faint targets too. |
+| **Confidence flag `△`** | Marks worlds where `pl_eqt_computed = True` — temperature inferred, not measured = lower-confidence bet. (Re-introduces a column cut for humans.) |
+| **Reachability flag `⚑`** | Marks worlds with missing `sy_dist` — **cannot be navigated to.** Flagged, never silently dropped. |
+| **Every dot near the zone** | Is a candidate seed target, not just the "best" few — portfolio logic. |
+
+## Risks (honesty for lethal-stakes, hive-mind bets)
+
+| Risk | Why it matters here | Mitigation |
+|---|---|---|
+| **Stability is not in the data** | It's the aliens' #1 criterion — three-body chaos is their trauma — and the chart cannot certify a stable orbit. | State on the image: *"Stability is unknown for every target. This map finds warmth and size — not peace."* Single-star host is at best a weak proxy; do not imply more. |
+| **"Survivable" uses human water-life bounds** | Trisolaran tolerance differs and is unknown; the box may mis-serve them. | Label the zone as *our* temperature guess, not their limit. Widen/annotate as uncertain. |
+| **Missing `sy_dist` = unnavigable** | A target you can't reach is no target; TRAPPIST-1 (a prime candidate) has no distance in this file. | `⚑` flag on-chart; never drop silently. |
+| **Computed temps are inferred** | Portfolio bets must be weighted by certainty. | `△` flag on `pl_eqt_computed = True`. |
+| **Portfolio logic tempts "seed everything"** | The chart must not imply reachability the data can't support (no fuel/time model). | Opacity shows cost honestly; the directive says *reachable*, not *all*. |
+| **Home cannot be plotted truthfully** | Home might sit inside the size/temp box yet be uninhabitable — its curse is chaos the chart can't render. | Anchor Home with an explicit note that its problem is stability, invisible here. |
+
+## Text diagram — Trisolaran cut (layout intent)
+
+```
+  RADIUS
+  (log)              ← FURNACES: DO NOT SEED →
+   ▲
+34 │          · ·▓▓▓▓▓▓▓▓▓▓▓· ·           1,164 worlds:
+   │       · ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ·          gas · heat · death
+11 ┤· · · · ·▓▓▓▓▓▓▓▓▓▓▓▓▓▓· · · · · · · · · · · · ·
+   │        ▓▓▓▓▓▓▓▓▓▓▓▓▓
+   │         ▓▓▓▓▓▓▓
+   │          ▓▓▓
+   │     ┌────────────────────────────┐
+ 2 ┤     │  SURVIVABLE ZONE (inferred) │  seed targets, n≈10
+   │     │   ○  ●   ○      ●   ○       │  ● near = cheap bet
+   │     │        ●          ○         │  ○ far  = costly bet
+ 1 ┤· · ·│· ●· · · · · · · · · · ·     │  ⚑ no distance = UNREACHABLE
+   │     │  ⚑           △              │  △ temp computed = low confidence
+0.3│     └────────────────────────────┘
+   └──────────────────────────────────────────▶
+      0.3d     1d     10d    100d   1000d+     ORBITAL PERIOD (log)
+      ← closer / cheaper to reach        farther →
+
+  ✚ HOME (three-body): would plot inside the zone — but its curse is CHAOS,
+    which this chart cannot show. STABILITY IS UNKNOWN FOR EVERY TARGET.
+    This map finds warmth and size — not peace.
+
+  DIRECTIVE: Seed every reachable target. One survivor = the civilization survives.
+```
+
+---
+
 ## Why Story A
 
 Of the candidate stories, "A Map of Our Blind Spots" wins on the three things that
