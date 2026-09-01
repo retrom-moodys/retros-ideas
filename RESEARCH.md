@@ -109,6 +109,55 @@ Cold, operational, deterministic. The takeaway lives in the words, e.g.:
 
 ---
 
+## ⚑⚑ ACTIVE REFRAME v2 — "The Attrition Run" (interactive)
+
+*Supersedes the delivery **medium** of the Trisolaran Cut, not its logic. The static
+scatter above is retained as the **mission-select map** (Layer 0); this section adds the
+interactive drill-down. Audience-as-alien, portfolio-survival logic, and every honesty
+rule are inherited unchanged and made **stricter** — an interactive sim can imply far more
+than a static chart, so the guardrails tighten.*
+
+**One line:** turn the target map into a played decision — you are the alien
+representative spending a finite crew to find seed worlds; each planet you test returns a
+verdict computed from real data, and a volunteer lives or dies on that verdict.
+
+### The two readings (toggle) — same numbers, opposite valence
+- **Alien (built first):** the attrition run — spend volunteers, watch the feed, log the
+  field of survivable bets. The emotional + data core.
+- **Human (deferred):** the NASA voyage — liftoff, astronaut-scientist narration, framed
+  as helping the fleet find home. Warmer, more invented content; specced later.
+
+### Core loop (alien, per planet)
+1. **Select** a target from the mission-select map. Missing-`sy_dist` worlds are `⚑` — you
+   cannot travel there; they can't be selected, only mourned.
+2. **Arrive** — a volunteer steps out to test conditions; you watch a video feed.
+3. **Verdict** — computed live from the data: survivable → the volunteer lives and the
+   world is logged as a seed target; lethal → the feed cuts out, the volunteer dies, cause
+   logged.
+4. **Log** — record the finding and its confidence (`△` computed temp = low confidence).
+   The accumulating log *is* the "complete field of seed targets" the static chart showed
+   at a glance — now earned one death at a time.
+5. **Resource** — crew is finite. Win = seed ≥1 survivable world before the crew runs out.
+   *One survivor is enough.* Portfolio logic: bet wide, spend to learn.
+
+### What is real vs. what is impression (STRICT — the ground-rule spine)
+- **Real, drives verdicts:** survivability (size+temp candidate logic), surface gravity
+  (`pl_bmasse ÷ pl_rade²`), freeze/boil (`pl_eqt`), reachability + confidence flags.
+- **Impression, drives nothing:** surface visuals, sky, terrain, atmosphere, "elements,"
+  crew faces — all watermarked *"ARTIST'S IMPRESSION — not from data."*
+- **Modeling assumption, labelled as such:** the lethal-gravity band (data gives gravity;
+  the human survivability threshold is our guess, like the temperature zone).
+- **Always on screen:** every verdict cites the column + value that produced it; the
+  stability caveat persists on *every* survivable verdict (*"tests warmth, size, gravity —
+  not orbital peace; stability is unknown."*). Blanks are unknown, never zero.
+
+### Why this is honest storytelling, not a game with a data skin
+Each death is a real verdict from the catalog's own columns; the sim dramatizes the
+*consequence* of the numbers, never the numbers themselves. The player does what the
+dataset's authors did — observe, record, mark confidence.
+
+---
+
 ## Why Story A
 
 Of the candidate stories, "A Map of Our Blind Spots" wins on the three things that
